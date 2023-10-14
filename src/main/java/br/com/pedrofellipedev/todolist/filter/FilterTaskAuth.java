@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import at.favre.lib.crypto.bcrypt.BCrypt;
 import br.com.pedrofellipedev.todolist.user.IUserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -24,17 +25,30 @@ public class FilterTaskAuth extends OncePerRequestFilter {
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
 
-    var authorization = request.getHeader("Authorization");
-    var authEncoded = authorization.substring("Basic".length()).trim();
-    byte[] authDecoded = Base64.getDecoder().decode(authEncoded);
-    var authString = new String(authDecoded);
-    String[] credentials = authString.split(":");
-    String username = credentials[0];
-    String password = credentials[1];
+    var servletPath = request.getServletPath();
 
-    var foundUser = this.userRepository.findByUsername(username);
-    if (foundUser == null) {
-      response.sendError(401, "User not authenticated");
+    if (servletPath.startsWith("/tasks")) {
+      var authorization = request.getHeader("Authorization");
+      var authEncoded = authorization.substring("Basic".length()).trim();
+      byte[] authDecoded = Base64.getDecoder().decode(authEncoded);
+      var authString = new String(authDecoded);
+      String[] credentials = authString.split(":");
+      String username = credentials[0];
+      String password = credentials[1];
+
+      var foundUser = this.userRepository.findByUsername(username);
+      if (foundUser == null) {
+        response.sendError(401, "User not authenticated");
+      } else {
+        var verifiedPassword = BCrypt.verifyer().verify(password.toCharArray(), foundUser.getPassword());
+
+        if (verifiedPassword.verified) {
+          request.setAttribute("idUser", foundUser.getId());
+          filterChain.doFilter(request, response);
+        } else {
+          response.sendError(401, "User not authenticated");
+        }
+      }
     } else {
       filterChain.doFilter(request, response);
     }
