@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.com.pedrofellipedev.todolist.utils.Utils;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -48,10 +49,20 @@ public class TaskController {
   }
 
   @PutMapping("/{id}")
-  public TaskModel update(@RequestBody TaskModel taskModel, HttpServletRequest request, @PathVariable UUID id) {
+  public ResponseEntity update(@RequestBody TaskModel taskModel, HttpServletRequest request, @PathVariable UUID id) {
+    var foundTask = this.taskRepository.findById(id).orElse(null);
+
+    if (foundTask == null) {
+      return ResponseEntity.status(400).body("Task not found");
+    }
+
     var idUser = request.getAttribute("idUser");
-    taskModel.setIdUser((UUID) idUser);
-    taskModel.setId(id);
-    return this.taskRepository.save(taskModel);
+    if (!foundTask.getIdUser().equals(idUser)) {
+      return ResponseEntity.status(400).body("User does not have permission to execute this action");
+    }
+
+    Utils.copyNonNullProperty(taskModel, foundTask);
+    var updatedTask = this.taskRepository.save(foundTask);
+    return ResponseEntity.ok().body(updatedTask);
   }
 }
